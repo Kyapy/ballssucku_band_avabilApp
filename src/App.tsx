@@ -543,91 +543,93 @@ function App() {
       </section>
 
       <section className="calendar-layout">
-        <section className="calendar-grid">
-          {WEEKDAYS.map((day, index) => (
-            <div
-              className={`weekday${index === 0 || index === 6 ? ' weekend' : ''}`}
-              key={day}
-            >
-              {day}
-            </div>
-          ))}
-
-          {dayList.map((date) => {
-            const dateKey = formatDateKey(date)
-            const inMonth = date.getMonth() === visibleMonth.getMonth()
-            const isWeekend = date.getDay() === 0 || date.getDay() === 6
-            const isTodayAest = dateKey === todayKey
-            const hasEveryoneInDay =
-              inMonth &&
-              membersCount > 0 &&
-              BLOCKS.some((block) => {
-                const key = `${dateKey}|${block.key}`
-                const count = availabilityByBlock.get(key)?.size ?? 0
-                return count === membersCount
-              })
-
-            return (
+        <div className="calendar-scroll">
+          <section className="calendar-grid">
+            {WEEKDAYS.map((day, index) => (
               <div
-                className={`day-cell ${isWeekend ? 'weekend' : 'weekday'}${
-                  inMonth ? '' : ' outside-month'
-                }${hasEveryoneInDay ? ' everyone-day' : ''}${
-                  isTodayAest ? ' today-card' : ''
-                }`}
-                key={dateKey}
+                className={`weekday${index === 0 || index === 6 ? ' weekend' : ''}`}
+                key={day}
               >
-                <div className={`day-label${isWeekend ? ' weekend-date' : ''}`}>
-                  {date.getDate()}
-                </div>
+                {day}
+              </div>
+            ))}
 
-                {BLOCKS.map((block) => {
+            {dayList.map((date) => {
+              const dateKey = formatDateKey(date)
+              const inMonth = date.getMonth() === visibleMonth.getMonth()
+              const isWeekend = date.getDay() === 0 || date.getDay() === 6
+              const isTodayAest = dateKey === todayKey
+              const hasEveryoneInDay =
+                inMonth &&
+                membersCount > 0 &&
+                BLOCKS.some((block) => {
                   const key = `${dateKey}|${block.key}`
                   const count = availabilityByBlock.get(key)?.size ?? 0
-                  const availableNames = availabilityNamesByBlock.get(key) ?? []
-                  const everyone =
-                    membersCount > 0 && count === membersCount && inMonth
-                  const mine = myAvailability.has(key)
+                  return count === membersCount
+                })
 
-                  return (
-                    <div
-                      className={`block-row${everyone ? ' everyone' : ''}${
-                        availableNames.length > 0 ? ' has-availability' : ''
-                      }`}
-                      key={block.key}
-                    >
-                      <button
-                        className={`toggle-btn${mine ? ' active' : ''}`}
-                        onClick={() => handleToggle(dateKey, block.key)}
-                        disabled={!user || !inMonth}
-                        title={
-                          user
-                            ? `Toggle ${block.label.toLowerCase()} availability`
-                            : 'Sign in to edit availability'
-                        }
+              return (
+                <div
+                  className={`day-cell ${isWeekend ? 'weekend' : 'weekday'}${
+                    inMonth ? '' : ' outside-month'
+                  }${hasEveryoneInDay ? ' everyone-day' : ''}${
+                    isTodayAest ? ' today-card' : ''
+                  }`}
+                  key={dateKey}
+                >
+                  <div className={`day-label${isWeekend ? ' weekend-date' : ''}`}>
+                    {date.getDate()}
+                  </div>
+
+                  {BLOCKS.map((block) => {
+                    const key = `${dateKey}|${block.key}`
+                    const count = availabilityByBlock.get(key)?.size ?? 0
+                    const availableNames = availabilityNamesByBlock.get(key) ?? []
+                    const everyone =
+                      membersCount > 0 && count === membersCount && inMonth
+                    const mine = myAvailability.has(key)
+
+                    return (
+                      <div
+                        className={`block-row${everyone ? ' everyone' : ''}${
+                          availableNames.length > 0 ? ' has-availability' : ''
+                        }`}
+                        key={block.key}
                       >
-                        <span className="toggle-label">{block.label}</span>
-                        <span className="toggle-time">{block.timeRange}</span>
-                      </button>
-                      <span className="count">{count + '/' + membersCount}</span>
-                      {availableNames.length > 0 ? (
-                        <div className="availability-popover" role="tooltip">
-                          <p className="popover-title">
-                            Available ({availableNames.length})
-                          </p>
-                          <ul className="popover-list">
-                            {availableNames.map((name) => (
-                              <li key={name}>{name}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          })}
-        </section>
+                        <button
+                          className={`toggle-btn${mine ? ' active' : ''}`}
+                          onClick={() => handleToggle(dateKey, block.key)}
+                          disabled={!user || !inMonth}
+                          title={
+                            user
+                              ? `Toggle ${block.label.toLowerCase()} availability`
+                              : 'Sign in to edit availability'
+                          }
+                        >
+                          <span className="toggle-label">{block.label}</span>
+                          <span className="toggle-time">{block.timeRange}</span>
+                        </button>
+                        <span className="count">{count + '/' + membersCount}</span>
+                        {availableNames.length > 0 ? (
+                          <div className="availability-popover" role="tooltip">
+                            <p className="popover-title">
+                              Available ({availableNames.length})
+                            </p>
+                            <ul className="popover-list">
+                              {availableNames.map((name) => (
+                                <li key={name}>{name}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </section>
+        </div>
 
         <aside className="everyone-sidebar">
           <h3>Everyone Available</h3>
