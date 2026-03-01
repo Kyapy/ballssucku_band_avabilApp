@@ -57,6 +57,19 @@ export async function fetchMembers(): Promise<Member[]> {
   return (data ?? []) as Member[]
 }
 
+export async function fetchMembersCount(): Promise<number> {
+  const client = ensureSupabase()
+  const { count, error } = await client
+    .from('members')
+    .select('user_id', { count: 'exact', head: true })
+
+  if (error) {
+    throw error
+  }
+
+  return count ?? 0
+}
+
 export async function fetchAvailabilityForMonth(
   startDate: string,
   endDate: string,
@@ -67,6 +80,22 @@ export async function fetchAvailabilityForMonth(
     .select('id, user_id, date, time_block')
     .gte('date', startDate)
     .lte('date', endDate)
+
+  if (error) {
+    throw error
+  }
+
+  return (data ?? []) as AvailabilityRow[]
+}
+
+export async function fetchAvailabilityFromDate(
+  startDate: string,
+): Promise<AvailabilityRow[]> {
+  const client = ensureSupabase()
+  const { data, error } = await client
+    .from('availability')
+    .select('id, user_id, date, time_block')
+    .gte('date', startDate)
 
   if (error) {
     throw error

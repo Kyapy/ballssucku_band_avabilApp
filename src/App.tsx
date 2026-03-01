@@ -1,8 +1,17 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react'
 import './App.css'
 import { supabase, supabaseConfigError } from './lib/supabaseClient'
 import {
+  fetchAvailabilityFromDate,
   fetchAvailabilityForMonth,
+  fetchMembersCount,
   fetchMembers,
   toggleAvailability,
   upsertMember,
@@ -10,16 +19,61 @@ import {
   type Member,
   type TimeBlock,
 } from './lib/data'
-import type { Session, User } from '@supabase/supabase-js'
+import type { Session } from '@supabase/supabase-js'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const BLOCKS: Array<{ key: TimeBlock; label: string }> = [
-  { key: 'day', label: 'Day (9-15)' },
-  { key: 'evening', label: 'Evening (16-21)' },
+const BLOCKS: Array<{ key: TimeBlock; label: string; timeRange: string }> = [
+  { key: 'day', label: 'Morning', timeRange: '9am to 3pm' },
+  { key: 'evening', label: 'Evening', timeRange: '4pm to 9pm' },
 ]
+const BLOCK_ORDER: Record<TimeBlock, number> = { day: 0, evening: 1 }
+const BLOCK_SHORT_LABEL: Record<TimeBlock, string> = {
+  day: 'Morning',
+  evening: 'Evening',
+}
 
 function formatDateKey(date: Date): string {
-  return date.toISOString().slice(0, 10)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatDateKeyInTimeZone(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const day = parts.find((part) => part.type === 'day')?.value
+
+  if (!year || !month || !day) {
+    return formatDateKey(date)
+  }
+
+  return `${year}-${month}-${day}`
+}
+
+function getMonthStartInTimeZone(timeZone: string): Date {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date())
+
+  const year = Number(parts.find((part) => part.type === 'year')?.value)
+  const month = Number(parts.find((part) => part.type === 'month')?.value)
+
+  if (!Number.isFinite(year) || !Number.isFinite(month)) {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), 1)
+  }
+
+  return new Date(year, month - 1, 1)
 }
 
 function buildMonthGrid(month: Date): Date[] {
@@ -34,13 +88,19 @@ function buildMonthGrid(month: Date): Date[] {
   })
 }
 
-function monthBounds(month: Date): { start: string; end: string } {
-  const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
-  const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
+function gridBounds(month: Date): { start: string; end: string } {
+  const gridDays = buildMonthGrid(month)
+  const startDate = gridDays[0]
+  const endDate = gridDays[gridDays.length - 1]
   return {
     start: formatDateKey(startDate),
     end: formatDateKey(endDate),
   }
+}
+
+function dateFromKey(dateKey: string): Date {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(year, month - 1, day)
 }
 
 function nameToEmail(name: string): string {
@@ -62,18 +122,30 @@ function App() {
   const [dataLoading, setDataLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [members, setMembers] = useState<Member[]>([])
+  const [membersDbCount, setMembersDbCount] = useState(0)
   const [availability, setAvailability] = useState<AvailabilityRow[]>([])
-  const [visibleMonth, setVisibleMonth] = useState(
-    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  const [upcomingAvailability, setUpcomingAvailability] = useState<
+    AvailabilityRow[]
+  >([])
+  const latestMonthRequestRef = useRef(0)
+  const [visibleMonth, setVisibleMonth] = useState(() =>
+    getMonthStartInTimeZone('Australia/Brisbane'),
   )
 
   const user = session?.user ?? null
-  const membersCount = members.length
+  const statusMessage =
+    errorMessage ??
+    (authLoading
+      ? 'Checking session...'
+      : dataLoading
+        ? 'Loading availability...'
+        : '')
   const monthLabel = visibleMonth.toLocaleDateString(undefined, {
     month: 'long',
     year: 'numeric',
   })
   const dayList = useMemo(() => buildMonthGrid(visibleMonth), [visibleMonth])
+  const todayKey = formatDateKeyInTimeZone(new Date(), 'Australia/Brisbane')
 
   const availabilityByBlock = useMemo(() => {
     const map = new Map<string, Set<string>>()
@@ -86,6 +158,37 @@ function App() {
     }
     return map
   }, [availability])
+
+  const memberNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const member of members) {
+      map.set(member.user_id, member.display_name)
+    }
+    return map
+  }, [members])
+
+  const availabilityNamesByBlock = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const [key, users] of availabilityByBlock.entries()) {
+      const names = Array.from(users)
+        .map((userId) => memberNameById.get(userId) ?? 'Member')
+        .sort((a, b) => a.localeCompare(b))
+      map.set(key, names)
+    }
+    return map
+  }, [availabilityByBlock, memberNameById])
+
+  const upcomingAvailabilityByBlock = useMemo(() => {
+    const map = new Map<string, Set<string>>()
+    for (const row of upcomingAvailability) {
+      const key = `${row.date}|${row.time_block}`
+      if (!map.has(key)) {
+        map.set(key, new Set<string>())
+      }
+      map.get(key)!.add(row.user_id)
+    }
+    return map
+  }, [upcomingAvailability])
 
   const myAvailability = useMemo(() => {
     const set = new Set<string>()
@@ -101,33 +204,135 @@ function App() {
     return set
   }, [availability, user])
 
+  const availabilityUserIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const row of availability) {
+      ids.add(row.user_id)
+    }
+    for (const row of upcomingAvailability) {
+      ids.add(row.user_id)
+    }
+    return ids
+  }, [availability, upcomingAvailability])
+
+  const membersCount =
+    membersDbCount > 0
+      ? membersDbCount
+      : Math.max(members.length, availabilityUserIds.size)
+
+  const everyoneAvailabilityList = useMemo(() => {
+    if (membersCount === 0) {
+      return []
+    }
+
+    return Array.from(upcomingAvailabilityByBlock.entries())
+      .filter(([, users]) => users.size === membersCount)
+      .map(([key]) => {
+        const [dateKey, timeBlock] = key.split('|') as [string, TimeBlock]
+        const date = dateFromKey(dateKey)
+        return {
+          key,
+          dateKey,
+          timeBlock,
+          monthKey: dateKey.slice(0, 7),
+          monthLabel: date.toLocaleDateString(undefined, {
+            month: 'long',
+            year: 'numeric',
+          }),
+          displayDate: date.toLocaleDateString(undefined, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+          }),
+          isWeekend: date.getDay() === 0 || date.getDay() === 6,
+        }
+      })
+      .sort((a, b) => {
+        if (a.dateKey !== b.dateKey) {
+          return a.dateKey.localeCompare(b.dateKey)
+        }
+        return BLOCK_ORDER[a.timeBlock] - BLOCK_ORDER[b.timeBlock]
+      })
+  }, [membersCount, upcomingAvailabilityByBlock])
+
+  const everyoneAvailabilityByMonth = useMemo(() => {
+    const grouped = new Map<
+      string,
+      { monthLabel: string; items: typeof everyoneAvailabilityList }
+    >()
+
+    for (const item of everyoneAvailabilityList) {
+      if (!grouped.has(item.monthKey)) {
+        grouped.set(item.monthKey, { monthLabel: item.monthLabel, items: [] })
+      }
+      grouped.get(item.monthKey)!.items.push(item)
+    }
+
+    return Array.from(grouped.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([monthKey, value]) => ({
+        monthKey,
+        monthLabel: value.monthLabel,
+        items: value.items,
+      }))
+  }, [everyoneAvailabilityList])
+
   const refreshMonthData = useCallback(
-    async (month: Date, currentUser: User | null) => {
-      if (!supabase || !currentUser) {
+    async (
+      month: Date,
+      options?: { showLoading?: boolean },
+    ) => {
+      const showLoading = options?.showLoading ?? true
+      const requestId = latestMonthRequestRef.current + 1
+      latestMonthRequestRef.current = requestId
+
+      if (!supabase) {
         setMembers([])
+        setMembersDbCount(0)
         setAvailability([])
+        setUpcomingAvailability([])
         return
       }
 
-      setDataLoading(true)
+      if (showLoading) {
+        setDataLoading(true)
+      }
       setErrorMessage(null)
       try {
-        const { start, end } = monthBounds(month)
-        const [fetchedMembers, fetchedAvailability] = await Promise.all([
-          fetchMembers(),
-          fetchAvailabilityForMonth(start, end),
-        ])
+        const { start, end } = gridBounds(month)
+        const [
+          fetchedMembers,
+          fetchedMembersCount,
+          fetchedAvailability,
+          fetchedUpcoming,
+        ] =
+          await Promise.all([
+            fetchMembers(),
+            fetchMembersCount(),
+            fetchAvailabilityForMonth(start, end),
+            fetchAvailabilityFromDate(todayKey),
+          ])
+        if (latestMonthRequestRef.current !== requestId) {
+          return
+        }
         setMembers(fetchedMembers)
+        setMembersDbCount(fetchedMembersCount)
         setAvailability(fetchedAvailability)
+        setUpcomingAvailability(fetchedUpcoming)
       } catch (error) {
+        if (latestMonthRequestRef.current !== requestId) {
+          return
+        }
         const message =
           error instanceof Error ? error.message : 'Failed to load data.'
         setErrorMessage(message)
       } finally {
-        setDataLoading(false)
+        if (showLoading && latestMonthRequestRef.current === requestId) {
+          setDataLoading(false)
+        }
       }
     },
-    [],
+    [todayKey],
   )
 
   useEffect(() => {
@@ -188,8 +393,8 @@ function App() {
   }, [user])
 
   useEffect(() => {
-    refreshMonthData(visibleMonth, user)
-  }, [refreshMonthData, user, visibleMonth])
+    refreshMonthData(visibleMonth)
+  }, [refreshMonthData, visibleMonth])
 
   const handleAuthSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -251,7 +456,7 @@ function App() {
     setErrorMessage(null)
     try {
       await toggleAvailability(user.id, dateKey, block, isAvailable)
-      await refreshMonthData(visibleMonth, user)
+      await refreshMonthData(visibleMonth, { showLoading: false })
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to update row.'
@@ -308,81 +513,158 @@ function App() {
         </div>
       </header>
 
-      {authLoading ? <p>Checking session...</p> : null}
-      {dataLoading ? <p>Loading availability...</p> : null}
-      {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
+      <p className={`status-line${errorMessage ? ' error-text' : ''}`}>
+        {statusMessage}
+      </p>
 
-      <section className="month-controls">
-        <button
-          onClick={() =>
-            setVisibleMonth(
-              (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
-            )
-          }
-        >
-          Prev
-        </button>
-        <h2>{monthLabel}</h2>
-        <button
-          onClick={() =>
-            setVisibleMonth(
-              (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
-            )
-          }
-        >
-          Next
-        </button>
+      <section className="calendar-layout month-nav-layout">
+        <section className="month-controls">
+          <button
+            onClick={() =>
+              setVisibleMonth(
+                (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
+              )
+            }
+          >
+            Prev
+          </button>
+          <h2>{monthLabel}</h2>
+          <button
+            onClick={() =>
+              setVisibleMonth(
+                (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
+              )
+            }
+          >
+            Next
+          </button>
+        </section>
+        <div className="month-nav-spacer" aria-hidden="true" />
       </section>
 
-      <section className="calendar-grid">
-        {WEEKDAYS.map((day) => (
-          <div className="weekday" key={day}>
-            {day}
-          </div>
-        ))}
-
-        {dayList.map((date) => {
-          const dateKey = formatDateKey(date)
-          const inMonth = date.getMonth() === visibleMonth.getMonth()
-
-          return (
+      <section className="calendar-layout">
+        <section className="calendar-grid">
+          {WEEKDAYS.map((day, index) => (
             <div
-              className={`day-cell${inMonth ? '' : ' outside-month'}`}
-              key={dateKey}
+              className={`weekday${index === 0 || index === 6 ? ' weekend' : ''}`}
+              key={day}
             >
-              <div className="day-label">{date.getDate()}</div>
+              {day}
+            </div>
+          ))}
 
-              {BLOCKS.map((block) => {
+          {dayList.map((date) => {
+            const dateKey = formatDateKey(date)
+            const inMonth = date.getMonth() === visibleMonth.getMonth()
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6
+            const isTodayAest = dateKey === todayKey
+            const hasEveryoneInDay =
+              inMonth &&
+              membersCount > 0 &&
+              BLOCKS.some((block) => {
                 const key = `${dateKey}|${block.key}`
                 const count = availabilityByBlock.get(key)?.size ?? 0
-                const everyone =
-                  membersCount > 0 && count === membersCount && inMonth
-                const mine = myAvailability.has(key)
+                return count === membersCount
+              })
 
-                return (
-                  <div
-                    className={`block-row${everyone ? ' everyone' : ''}`}
-                    key={block.key}
-                  >
-                    <button
-                      className={`toggle-btn${mine ? ' active' : ''}`}
-                      onClick={() => handleToggle(dateKey, block.key)}
-                      disabled={!user || !inMonth}
-                      title={
-                        user
-                          ? `Toggle ${block.label.toLowerCase()} availability`
-                          : 'Sign in to edit availability'
-                      }
+            return (
+              <div
+                className={`day-cell ${isWeekend ? 'weekend' : 'weekday'}${
+                  inMonth ? '' : ' outside-month'
+                }${hasEveryoneInDay ? ' everyone-day' : ''}${
+                  isTodayAest ? ' today-card' : ''
+                }`}
+                key={dateKey}
+              >
+                <div className={`day-label${isWeekend ? ' weekend-date' : ''}`}>
+                  {date.getDate()}
+                </div>
+
+                {BLOCKS.map((block) => {
+                  const key = `${dateKey}|${block.key}`
+                  const count = availabilityByBlock.get(key)?.size ?? 0
+                  const availableNames = availabilityNamesByBlock.get(key) ?? []
+                  const everyone =
+                    membersCount > 0 && count === membersCount && inMonth
+                  const mine = myAvailability.has(key)
+
+                  return (
+                    <div
+                      className={`block-row${everyone ? ' everyone' : ''}${
+                        availableNames.length > 0 ? ' has-availability' : ''
+                      }`}
+                      key={block.key}
                     >
-                      {block.label}
-                    </button>
-                    <span className="count">{count + '/' + membersCount}</span>
-                  </div>
-                )
-              })}
+                      <button
+                        className={`toggle-btn${mine ? ' active' : ''}`}
+                        onClick={() => handleToggle(dateKey, block.key)}
+                        disabled={!user || !inMonth}
+                        title={
+                          user
+                            ? `Toggle ${block.label.toLowerCase()} availability`
+                            : 'Sign in to edit availability'
+                        }
+                      >
+                        <span className="toggle-label">{block.label}</span>
+                        <span className="toggle-time">{block.timeRange}</span>
+                      </button>
+                      <span className="count">{count + '/' + membersCount}</span>
+                      {availableNames.length > 0 ? (
+                        <div className="availability-popover" role="tooltip">
+                          <p className="popover-title">
+                            Available ({availableNames.length})
+                          </p>
+                          <ul className="popover-list">
+                            {availableNames.map((name) => (
+                              <li key={name}>{name}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </section>
+
+        <aside className="everyone-sidebar">
+          <h3>Everyone Available</h3>
+          {everyoneAvailabilityList.length === 0 ? (
+            <p className="sidebar-empty">
+              No upcoming full-band slots.
+            </p>
+          ) : (
+            <div className="everyone-groups">
+              {everyoneAvailabilityByMonth.map((group) => (
+                <section className="everyone-month-group" key={group.monthKey}>
+                  <h4>{group.monthLabel}</h4>
+                  <ul className="everyone-list">
+                    {group.items.map((item) => (
+                      <li key={item.key}>
+                        <span
+                          className={item.isWeekend ? 'weekend-item-date' : ''}
+                        >
+                          {item.displayDate}
+                        </span>
+                        <strong
+                          className={`slot-label ${
+                            item.timeBlock === 'day'
+                              ? 'morning-label'
+                              : 'evening-label'
+                          }`}
+                        >
+                          {BLOCK_SHORT_LABEL[item.timeBlock]}
+                        </strong>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
             </div>
-          )
-        })}
+          )}
+        </aside>
       </section>
     </div>
   )

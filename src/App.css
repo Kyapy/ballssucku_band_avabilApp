@@ -55,6 +55,7 @@
   justify-content: center;
   gap: 0.75rem;
   margin: 1rem 0;
+  grid-column: 1;
 }
 
 .month-controls h2 {
@@ -70,18 +71,54 @@
   gap: 0.45rem;
 }
 
+.calendar-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.month-nav-layout {
+  align-items: center;
+}
+
+.month-nav-spacer {
+  grid-column: 2;
+}
+
 .weekday {
   font-size: 0.8rem;
   color: #8f9abd;
   text-align: center;
 }
 
+.weekday.weekend {
+  color: #ff6a6a;
+}
+
 .day-cell {
   border: 1px solid #2c3448;
   border-radius: 0.6rem;
-  background: #141b2d;
   min-height: 108px;
   padding: 0.45rem;
+}
+
+.day-cell.weekday {
+  background: #141b2d;
+}
+
+.day-cell.weekend {
+  background: #141b2d;
+}
+
+.day-cell.everyone-day {
+  border-color: #2f8a5f;
+  background: linear-gradient(180deg, #173328 0%, #141b2d 72%);
+}
+
+.day-cell.today-card {
+  border: 2px solid #eef4ff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 
 .day-cell.outside-month {
@@ -92,6 +129,11 @@
   font-size: 0.9rem;
   font-weight: 600;
   margin-bottom: 0.35rem;
+  text-align: left;
+}
+
+.day-label.weekend-date {
+  color: #ff6a6a;
 }
 
 .block-row {
@@ -102,13 +144,31 @@
   border-radius: 0.4rem;
   padding: 0.2rem;
   margin-bottom: 0.2rem;
+  position: relative;
 }
 
 .block-row.everyone {
-  background: #1e4e36;
+  background: #225940;
+}
+
+.block-row.everyone .toggle-btn {
+  border-color: #69d399;
+  background: #1a3a2c;
+}
+
+.block-row.everyone .toggle-label {
+  color: #dcffe9;
+}
+
+.block-row.everyone .toggle-time {
+  color: #8df0b8;
 }
 
 .toggle-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.05rem;
   text-align: left;
   border: 1px solid #364056;
   border-radius: 0.4rem;
@@ -116,6 +176,18 @@
   color: #dbe4ff;
   padding: 0.25rem 0.35rem;
   font-size: 0.74rem;
+}
+
+.toggle-label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.toggle-time {
+  font-size: 0.64rem;
+  color: #a9b7dc;
+  line-height: 1.1;
 }
 
 .toggle-btn.active {
@@ -128,14 +200,140 @@
   color: #9fb0da;
 }
 
+.availability-popover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 0.3rem);
+  z-index: 20;
+  min-width: 170px;
+  max-width: 210px;
+  border: 1px solid #365273;
+  border-radius: 0.45rem;
+  background: #0c1322;
+  padding: 0.4rem 0.45rem;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translateY(-3px);
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.block-row.has-availability:hover .availability-popover,
+.block-row.has-availability:focus-within .availability-popover {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.popover-title {
+  margin: 0 0 0.25rem;
+  font-size: 0.69rem;
+  color: #b8c8ef;
+}
+
+.popover-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.14rem;
+}
+
+.popover-list li {
+  font-size: 0.73rem;
+  color: #e4ecff;
+}
+
 .error-text {
   color: #ff9b9b;
+}
+
+.status-line {
+  min-height: 1.25rem;
+  margin: 0 0 0.35rem;
+}
+
+.everyone-sidebar {
+  border: 1px solid #2c3448;
+  border-radius: 0.6rem;
+  background: #141b2d;
+  padding: 0.8rem;
+}
+
+.everyone-sidebar h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+
+.everyone-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.everyone-groups {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.everyone-month-group h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.86rem;
+  color: #c8d4f6;
+}
+
+.everyone-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 0.45rem;
+  background: #0f1524;
+  border: 1px solid #263149;
+  font-size: 0.82rem;
+}
+
+.everyone-list strong:not(.slot-label) {
+  color: #9de0b6;
+}
+
+.slot-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.morning-label {
+  color: #ffd46b;
+}
+
+.evening-label {
+  color: #8dbdff;
+}
+
+.weekend-item-date {
+  color: #ff6a6a;
+}
+
+.sidebar-empty {
+  margin: 0;
+  color: #9fb0da;
+  font-size: 0.85rem;
 }
 
 @media (max-width: 760px) {
   .topbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .calendar-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .month-nav-spacer {
+    display: none;
   }
 
   .calendar-grid {
@@ -157,5 +355,13 @@
 
   .toggle-btn {
     font-size: 0.65rem;
+  }
+
+  .toggle-label {
+    font-size: 0.65rem;
+  }
+
+  .toggle-time {
+    font-size: 0.58rem;
   }
 }
