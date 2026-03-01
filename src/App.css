@@ -1,0 +1,161 @@
+.app-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.auth-form {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.auth-form input {
+  border: 1px solid #364056;
+  border-radius: 0.5rem;
+  background: #0f1524;
+  color: #dbe4ff;
+  padding: 0.45rem 0.55rem;
+  min-width: 120px;
+}
+
+.user-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 2rem;
+  border: 1px solid #3c4356;
+  border-radius: 999px;
+  padding: 0 0.75rem;
+  font-size: 0.9rem;
+}
+
+.month-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.month-controls h2 {
+  min-width: 180px;
+  margin: 0;
+  text-align: center;
+  font-size: 1.2rem;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.weekday {
+  font-size: 0.8rem;
+  color: #8f9abd;
+  text-align: center;
+}
+
+.day-cell {
+  border: 1px solid #2c3448;
+  border-radius: 0.6rem;
+  background: #141b2d;
+  min-height: 108px;
+  padding: 0.45rem;
+}
+
+.day-cell.outside-month {
+  opacity: 0.45;
+}
+
+.day-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.block-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 0.4rem;
+  padding: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+
+.block-row.everyone {
+  background: #1e4e36;
+}
+
+.toggle-btn {
+  text-align: left;
+  border: 1px solid #364056;
+  border-radius: 0.4rem;
+  background: #0f1524;
+  color: #dbe4ff;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.74rem;
+}
+
+.toggle-btn.active {
+  border-color: #63b889;
+  background: #183728;
+}
+
+.count {
+  font-size: 0.72rem;
+  color: #9fb0da;
+}
+
+.error-text {
+  color: #ff9b9b;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .calendar-grid {
+    gap: 0.3rem;
+  }
+
+  .auth-form {
+    width: 100%;
+  }
+
+  .auth-form input {
+    flex: 1 1 100%;
+  }
+
+  .day-cell {
+    min-height: 94px;
+    padding: 0.3rem;
+  }
+
+  .toggle-btn {
+    font-size: 0.65rem;
+  }
+}
