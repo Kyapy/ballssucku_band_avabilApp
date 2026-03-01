@@ -133,6 +133,8 @@ function App() {
   )
 
   const user = session?.user ?? null
+  const isAnonymousUser = user?.app_metadata?.provider === 'anonymous'
+  const editableUser = user && !isAnonymousUser ? user : null
   const statusMessage =
     errorMessage ??
     (authLoading
@@ -192,17 +194,17 @@ function App() {
 
   const myAvailability = useMemo(() => {
     const set = new Set<string>()
-    if (!user) {
+    if (!editableUser) {
       return set
     }
 
     for (const row of availability) {
-      if (row.user_id === user.id) {
+      if (row.user_id === editableUser.id) {
         set.add(`${row.date}|${row.time_block}`)
       }
     }
     return set
-  }, [availability, user])
+  }, [availability, editableUser])
 
   const availabilityUserIds = useMemo(() => {
     const ids = new Set<string>()
@@ -351,7 +353,17 @@ function App() {
         if (error) {
           throw error
         }
-        setSession(currentSession)
+        if (currentSession) {
+          setSession(currentSession)
+          return
+        }
+
+        const { data: anonData, error: anonError } =
+          await client.auth.signInAnonymously()
+        if (anonError) {
+          throw anonError
+        }
+        setSession(anonData.session)
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Failed to initialize auth.'
@@ -375,13 +387,13 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!supabase || !user) {
+    if (!supabase || !editableUser) {
       return
     }
 
     const syncMember = async () => {
       try {
-        await upsertMember(user)
+        await upsertMember(editableUser)
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Failed to sync member.'
@@ -390,11 +402,11 @@ function App() {
     }
 
     syncMember()
-  }, [user])
+  }, [editableUser])
 
   useEffect(() => {
     refreshMonthData(visibleMonth)
-  }, [refreshMonthData, visibleMonth])
+  }, [refreshMonthData, visibleMonth, user])
 
   const handleAuthSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -446,7 +458,7 @@ function App() {
   }
 
   const handleToggle = async (dateKey: string, block: TimeBlock) => {
-    if (!user) {
+    if (!editableUser) {
       return
     }
 
@@ -455,7 +467,7 @@ function App() {
 
     setErrorMessage(null)
     try {
-      await toggleAvailability(user.id, dateKey, block, isAvailable)
+      await toggleAvailability(editableUser.id, dateKey, block, isAvailable)
       await refreshMonthData(visibleMonth, { showLoading: false })
     } catch (error) {
       const message =
@@ -479,12 +491,12 @@ function App() {
       <header className="topbar">
         <h1>Band Availability</h1>
         <div className="auth-actions">
-          {user ? (
+          {editableUser ? (
             <>
               <span className="user-pill">
-                {user.user_metadata?.display_name ??
-                  user.user_metadata?.full_name ??
-                  user.email ??
+                {editableUser.user_metadata?.display_name ??
+                  editableUser.user_metadata?.full_name ??
+                  editableUser.email ??
                   'Member'}
               </span>
               <button onClick={handleLogout}>Logout</button>
@@ -597,14 +609,14 @@ function App() {
                         key={block.key}
                       >
                         <button
-                          className={`toggle-btn${mine ? ' active' : ''}`}
-                          onClick={() => handleToggle(dateKey, block.key)}
-                          disabled={!user || !inMonth}
-                          title={
-                            user
-                              ? `Toggle ${block.label.toLowerCase()} availability`
-                              : 'Sign in to edit availability'
-                          }
+                        className={`toggle-btn${mine ? ' active' : ''}`}
+                        onClick={() => handleToggle(dateKey, block.key)}
+                        disabled={!editableUser || !inMonth}
+                        title={
+                          editableUser
+                            ? `Toggle ${block.label.toLowerCase()} availability`
+                            : 'Sign in to edit availability'
+                        }
                         >
                           <span className="toggle-label">{block.label}</span>
                           <span className="toggle-time">{block.timeRange}</span>
