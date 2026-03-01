@@ -57,7 +57,6 @@ function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [authBusy, setAuthBusy] = useState(false)
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
   const [nameInput, setNameInput] = useState('')
   const [passwordInput, setPasswordInput] = useState('')
   const [dataLoading, setDataLoading] = useState(false)
@@ -219,28 +218,6 @@ function App() {
     setErrorMessage(null)
     setAuthBusy(true)
 
-    if (authMode === 'signup') {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password: passwordInput,
-        options: {
-          data: {
-            display_name: trimmedName,
-          },
-        },
-      })
-
-      if (error) {
-        setErrorMessage(error.message)
-      } else if (!data.session) {
-        setErrorMessage(
-          'Account created. If email confirmation is enabled, disable it for name/password login.',
-        )
-      }
-      setAuthBusy(false)
-      return
-    }
-
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password: passwordInput,
@@ -324,16 +301,7 @@ function App() {
                 disabled={authBusy || authLoading}
               />
               <button type="submit" disabled={authBusy || authLoading}>
-                {authMode === 'signup' ? 'Create account' : 'Log in'}
-              </button>
-              <button
-                type="button"
-                disabled={authBusy || authLoading}
-                onClick={() =>
-                  setAuthMode((prev) => (prev === 'login' ? 'signup' : 'login'))
-                }
-              >
-                {authMode === 'login' ? 'Need account?' : 'Have account?'}
+                Log in
               </button>
             </form>
           )}

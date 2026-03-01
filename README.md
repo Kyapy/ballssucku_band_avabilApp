@@ -114,13 +114,34 @@ using (user_id = auth.uid());
 
 1. In Supabase Dashboard, open `Authentication -> Providers -> Email`.
 2. Enable Email provider.
-3. For this app's simple login flow, turn off email confirmation:
+3. Disable open registration (no self sign-up):
+- `Authentication -> Providers -> Email -> Enable email signup` = Off
+4. For this app's login flow, turn off email confirmation:
 - `Authentication -> Providers -> Email -> Confirm email` = Off
-4. Users create accounts in the app using a name and password.
+5. Users log in only; accounts are created by you as admin.
 
 Notes:
 - The app maps each name to an internal auth email format: `name@band.local`.
 - Each member must always use the same name/password combination to log in.
+
+### Create member logins (admin)
+
+Create users in Supabase Dashboard:
+
+1. Go to `Authentication -> Users`.
+2. Click `Add user`.
+3. Set:
+- Email: `<member-name>@band.local` (example: `alex@band.local`)
+- Password: set a password for that member
+- Email confirmed: On
+- User metadata (JSON): `{"display_name":"Alex"}`
+4. Share the member's name and password with them:
+- Name field in app: `Alex`
+- Password field in app: the password you set
+
+Important:
+- The name entered in the app must map to the same email slug.
+- Example: `Alex Smith` becomes `alex-smith@band.local`.
 
 ## Deploy to Vercel
 
