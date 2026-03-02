@@ -23,7 +23,7 @@ import type { Session } from '@supabase/supabase-js'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const BLOCKS: Array<{ key: TimeBlock; label: string; timeRange: string }> = [
-  { key: 'day', label: 'Morning', timeRange: '9am to 3pm' },
+  { key: 'day', label: 'Morning', timeRange: '9am to 2pm' },
   { key: 'evening', label: 'Evening', timeRange: '4pm to 9pm' },
 ]
 const BLOCK_ORDER: Record<TimeBlock, number> = { day: 0, evening: 1 }
